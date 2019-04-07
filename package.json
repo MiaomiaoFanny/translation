@@ -1,0 +1,29 @@
+{
+  "name": "git-translation",
+  "version": "1.0.0",
+  "description": "Translation practice update aperiodically",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MiaomiaoFanny/translation.git"
+  },
+  "author": "Fanny.zhou",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MiaomiaoFanny/translation/issues"
+  },
+  "homepage": "https://github.com/MiaomiaoFanny/translation#readme",
+  "dependencies": {
+    "dotenv": "^7.0.0",
+    "express": "^4.16.4"
+  },
+  "devDependencies": {
+    "browser-sync": "^2.26.3",
+    "gulp": "^4.0.0",
+    "gulp-nodemon": "^2.4.2"
+  }
+}

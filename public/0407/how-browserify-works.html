@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How Browserify Works</title>
+
+  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,600" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="mask-icon" href="./safari-pinned-tab.svg" color="#5bbad5">
+  <meta name="theme-color" content="#ffffff">
+
+  <!-- Piwik -->
+  <script type="text/javascript">
+    var _paq = _paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function () {
+      var u = "//bclinkinbeard.innocraft.cloud/";
+      _paq.push(['setTrackerUrl', u + 'piwik.php']);
+      _paq.push(['setSiteId', '1']);
+      var d = document,
+        g = d.createElement('script'),
+        s = d.getElementsByTagName('script')[0];
+      g.type = 'text/javascript';
+      g.async = true;
+      g.defer = true;
+      g.src = u + 'piwik.js';
+      s.parentNode.insertBefore(g, s);
+    })();
+  </script>
+  <!-- End Piwik Code -->
+</head>
+
+<body>
+  <main role="main" class="container">
+    <article class="row">
+      <header>
+        <a href='/'><--Back</a>
+        <h1>How Browserify Works</h1>
+        <h4 class="post-date-label">2014年 一月</h3>
+      </header>
+      <p>最近<a href="https://github.com/substack/node-browserify/">Browserify</a>无疑是非常流行的. 在这篇文章中我们来看看它的基本工作原理.</p>
+        <p>Browserify 使用一个术语入口文件(entry file(s))来描述从哪里开始读取依赖图， 而其输出则称为束(bundle). 在最高级别上, 一个 Browserify束 是一个简单的立即执行函数(<a
+            href="http://benalman.com/news/2010/11/immediately-invoked-function-expression/">IIFE</a> Immediately
+            Invoked Function Expression). (根据名称可以看出)它就是一个让代码在加载后立即执行的简单执行原理.
+        </p>
+
+      <h2 id="the-module-map">模块映射(The module map)</h2>
+      <p>传入立即执行函数的第一个参数是一个映射表(map), 键(key)是一个唯一的数字, 值(values)是拥有两个元素的数组. 如下是一个简单的例子</p>
+      <pre><code class="language-javascript">
+{
+    1: [function (require, module, exports) {
+      module.exports = &#39;DEP&#39;;
+
+    }, {}],
+    2: [function (require, module, exports) {
+      require(&#39;./dep&#39;);
+
+      module.exports = &#39;ENTRY&#39;;
+
+    }, {&quot;./dep&quot;: 1}]
+}
+      </code></pre>
+      <p>可以看到, 每一个模块都被赋予了一个唯一的数字id. 文件entry.js的内容被包裹起来, 其数字id是2. 文件dep.js的内容也被包裹起来, 其数字id为1.</p>
+      <p>让我们首先看看entry.js模块. 数组的第一个元素是包裹在一个闭包中的由Browserify生成的源码. 这样做的目的是为了防止作用域变量污染和保证你的代码可以访问Node环境提供的变量.下一节我们会详细的分析这个闭包.</p>
+      <p>数组的第二个元素是也是一个映射表, 但是是表示模块依赖关系的. 通过<code>require('./dep');</code>得知entry.js是依赖于dep.js的, 那么在源码中, entry.js的依赖关系映射表就会有一个表示为'./dep'的入口, 其值当然就是映射表中dep.js的键值1<code>{'./dep':1}</code>. 而dep.js没有依赖任何模块, 它的依赖映射表就是一个空的对象<code>{}</code>.</p>
+      <p>虽然这是一个极其简单的例子， 但你可以看清楚依赖树是如何在代码里被创建的. 这些输出内容是通过Browserify依赖的其中一个库<a href="https://github.com/substack/browser-pack">browser-pack</a>生成的.</p>
+
+      <h3 id="generated-closure">生成的闭包(Generated closure)</h3>
+      <p>目前为止我们已经理解了不同文件之间是如何组合, 关联及依赖的. 接下来看看一个独立的文件内容是如何扩展的. entry.js 的代码非常精简:</p>
+      <pre><code class="language-javascript">require(&#39;./dep&#39;);
+module.exports = &#39;ENTRY&#39;; </code></pre>
+      <p>但在束(bundle)中却呈现为如下</p>
+      <pre><code class="language-javascript">function (require, module, exports) {
+  require(&#39;./dep&#39;);
+  module.exports = &#39;ENTRY&#39;;
+} </code></pre>
+      <p>Browserify 将代码封装在给定了一些重要参数的闭包中. Node在其环境中提供了一个require <a href="http://nodejs.org/api/globals.html#globals_require">方法</a>来提供同步加载依赖的服务. 而在客户端 则是一个完全不同的环境. 浏览器中并没有原生的require 方法可使用. 因此Browserify通过传递参数的方式让我们能够访问来为我们实现了它.
+      <p>假如你熟悉CommonJS语法(在Node中也会使用), 参数<code>module</code> 和 <code>exports</code> 的作用就非常明显了. CommonJS 模块通过<code>module</code>或 <code>exports</code>参数来指定可暴露到外部环境的值. 在entry.js模块中, 通过将<code>module.exports</code>指向字符串“ENTRY"来使其指定为模块的输出. 如果我们希望暴露更多的内容, 可以直接使用<code>exports</code>, 例如<code>exports.foo = “FOO”;
+          exports.bar = “BAR”</code>. 再次强调, 这些东西(require, module, exports)在浏览器默认环境并不存在, 只是Browserify提供的这些。Browserify拯救了浏览器</p>
+      <h2 id="the-cache">(缓存)The cache</h2>
+      <p>第二个传入立即执行函数的参数是一些模块的缓存(cache), 这些模块是在当前束(bundle)加载之前的那些束(bundle)中定义的模块. 它大部分情况下总是空的<code>{}</code>, 所有在这里我们实际上会跳过它. 只需要知道, 它基本上是另一个在其他地方定义的模块映射表, 在你的bundle(束)启动时可能会传递过来</p>
+
+      <h2 id="entry-modules">入口模块(Entry modules)</h2>
+      <p>第三个也是最后一个传递给立即执行函数的参数是一个模块的id列表数组, 将作为构建依赖表的起点. 在我们的例子中, entry.js 的 id 是2 (且它是唯一的入口), 因此 这个参数就是<code>[2]</code>. 这是一个数组, 你可以指定多个入口文件, 这对于跑测试显然很一般(常用?), 但不常见</p>
+      <h2 id="making-it-all-work">让其工作起来吧(Making it all work)</h2>
+      <p>现在我们了解了到底传递了什么(参数), 现在来谈谈立即执行函数中的函数(F)到底做了什么. 这个函数也来自browser-pack. 需要特别指出的是, <a
+          href="https://github.com/substack/browser-pack/blob/d29fddc8a9207d5f967664935073b50971aff708/prelude.js">prelude.js
+          </a>这个文件. 鼓励你点击链接去亲自读一读(有非常友好的注释), 但是实际上内容比看起来还要更简单.</p>
+      <p>基本上, 每一个入口模块id会被映射到一个函数, 这个id对应的函数是在缓存(cache)中寻找的. 如果找到了, 模块的exports属性被返回来填充依赖. 如果id在缓存(cache)中未找到, 那么就去检查模块映射.</p>
+      <p>当id在模块映射中被找到, 被生成的闭包会被传递require, module, exports参数然后执行, 然后这个模块也被加入缓存(cache)中,  这个模块也可以访问它自己的依赖映射, 因此它自己的require可以被使用</p>
+      <p>假如id在模块映射中未被找到, Browserify会在任何预先加载的束(bundle)中查找id, 如果仍未找到, 抛出错误.</p>
+
+      <h2 id="conclusion">结论(Conclusion)</h2>
+      <p>呼！虽然基本原理非常简单,但还有很多很棒和复杂的方法来做能够做到的更多更好的实现. 在这里我们仅仅列举了最简单的情景, 但不只如此, Browserify还支持许多高级特性, 像aliases, external modules, transforms等等. 这些内容， 我们会在将来谈及. 到那时,我高度推荐你在下一个项目中使用.它具有高生产力, 高性能, 在<a href="http://npmjs.org">npm</a>中有上万的包可供使用. 你怎么能不爱呢？
+      <h2 id="browserify-screencasts">Browserify 演示</h2>
+      <p>如果你喜欢这篇文章, 我在<a
+          href="http://egghead.io">egghead.io</a>还有很多介绍Browserify的视频. <a
+          href="https://egghead.io/lessons/nodejs-introduction-to-browserify-part-1">第一个</a>是免费的, 但 <a href="https://egghead.io/lessons/nodejs-introduction-to-browserify-part-2">第二个</a>需要订阅.</p>
+    </article>
+  </main>
+  <footer>
+    <aside class="container">
+      <p style="text-align:center">
+        @Fanny.Zhou 译于2019.4.7(日).
+        初学翻译, 有许多不足, 若有心人能帮助指正, 万分感谢。
+      </p>
+    </aside>
+  </footer>
+  <!-- Drip -->
+  <script type="text/javascript">
+    var _dcq = _dcq || [];
+    var _dcs = _dcs || {};
+    _dcs.account = '4436187';
+
+    (function () {
+      var dc = document.createElement('script');
+      dc.type = 'text/javascript';
+      dc.async = true;
+      dc.src = '//tag.getdrip.com/4436187.js';
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(dc, s);
+    })();
+  </script>
+  <script src="./prism.js" async></script>
+</body>
+
+</html>
